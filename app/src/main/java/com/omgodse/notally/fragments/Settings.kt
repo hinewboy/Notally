@@ -207,7 +207,7 @@ class Settings : Fragment() {
                 scope.launch {
                     try {
                         val notes = dao.getAllNotes()
-                        val count = CloudSync.upload(token, notes)
+                        val count = CloudSync.upload(token, notes, requireContext())
                         Toast.makeText(requireContext(), getString(R.string.upload_success, count), Toast.LENGTH_SHORT).show()
                     } catch (e: CloudSync.ApiException) {
                         Toast.makeText(requireContext(), getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_LONG).show()

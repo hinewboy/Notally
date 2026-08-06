@@ -1,5 +1,6 @@
 package com.omgodse.notally.miscellaneous
 
+import android.app.Application
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.HttpURLConnection
@@ -54,11 +56,46 @@ object CloudSync {
         request("/api/login", "POST", body).let { parseSession(it) }
     }
 
-    /** 上传全部笔记，返回服务器确认的笔记数 */
-    suspend fun upload(token: String, notes: List<BaseNote>): Int = withContext(Dispatchers.IO) {
+    /** 上传全部笔记（含图片/音频附件），返回服务器确认的笔记数 */
+    suspend fun upload(token: String, notes: List<BaseNote>, context: Context): Int = withContext(Dispatchers.IO) {
         val array = JSONArray()
         notes.forEach { array.put(noteToJson(it)) }
-        val body = JSONObject().put("notes", array).toString()
+
+        // 收集附件（图片/音频）base64
+        val attachments = JSONArray()
+        val app = context.applicationContext as Application
+        val imageDir = IO.getExternalImagesDirectory(app)
+        val audioDir = IO.getExternalAudioDirectory(app)
+        notes.forEach { note ->
+            note.images.forEach { image ->
+                val file = if (imageDir != null) File(imageDir, image.name) else null
+                if (file != null && file.exists()) {
+                    val data = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
+                    attachments.put(JSONObject().apply {
+                        put("noteId", note.id)
+                        put("kind", "image")
+                        put("name", image.name)
+                        put("mime", image.mimeType)
+                        put("data", data)
+                    })
+                }
+            }
+            note.audios.forEach { audio ->
+                val file = if (audioDir != null) File(audioDir, audio.name) else null
+                if (file != null && file.exists()) {
+                    val data = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
+                    attachments.put(JSONObject().apply {
+                        put("noteId", note.id)
+                        put("kind", "audio")
+                        put("name", audio.name)
+                        put("mime", "audio/mp4")
+                        put("data", data)
+                    })
+                }
+            }
+        }
+
+        val body = JSONObject().put("notes", array).put("attachments", attachments).toString()
         val response = request("/api/notes", "PUT", body, token)
         response.optInt("count", 0)
     }
@@ -128,6 +165,8 @@ object CloudSync {
         put("body", note.body)
         put("spans", Converters.spansToJSONArray(note.spans))
         put("items", Converters.itemsToJSONArray(note.items))
+        put("images", Converters.imagesToJson(note.images))
+        put("audios", Converters.audiosToJson(note.audios))
         put("reminder", note.reminder?.let { JSONObject().put("timestamp", it.timestamp).put("frequency", it.frequency.name) } ?: JSONObject.NULL)
     }
 
@@ -176,6 +215,21 @@ object CloudSync {
             pinned = pinned, timestamp = timestamp, labels = labels, body = body,
             spans = spans, items = items, images = emptyList(), audios = emptyList(), reminder = reminder
         )
+    }
+
+    /** JSON 中的 images/audios 字段（附件名列表） */
+    fun parseImages(json: JSONObject): List<String> {
+        val arr = json.optJSONArray("images") ?: JSONArray()
+        return (0 until arr.length()).map { i ->
+            arr.getJSONObject(i).optString("name")
+        }
+    }
+
+    fun parseAudios(json: JSONObject): List<String> {
+        val arr = json.optJSONArray("audios") ?: JSONArray()
+        return (0 until arr.length()).map { i ->
+            arr.getJSONObject(i).optString("name")
+        }
     }
 
     private fun JSONArray.toStringList(): List<String> = (0 until length()).map { getString(it) }

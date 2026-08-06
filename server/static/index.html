@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>樱花便签 · 日记本</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#FF8FAB">
+<style>
+  :root {
+    --pink: #FF8FAB; --pink-dark: #E56E8F; --pink-light: #FFF0F3;
+    --bg: #FFF7F9; --card: #fff; --text: #3d3d3d; --muted: #9a9a9a;
+    --border: #f5dfe5; --shadow: 0 4px 24px rgba(255,143,171,.14);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  ::selection { background: var(--pink); color: #fff; }
+
+  /* ===== Hero ===== */
+  .hero {
+    background: linear-gradient(160deg, #FF8FAB 0%, #FFB7C5 45%, #FFD3DD 100%);
+    color: #fff; text-align: center; padding: 56px 20px 84px; position: relative; overflow: hidden;
+  }
+  .hero::before, .hero::after {
+    content: "🌸"; position: absolute; font-size: 44px; opacity: .35; animation: float 6s ease-in-out infinite;
+  }
+  .hero::before { top: 30px; left: 12%; }
+  .hero::after { bottom: 20px; right: 14%; animation-delay: 3s; }
+  @keyframes float { 0%,100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-14px) rotate(10deg); } }
+  .hero h1 { font-size: 34px; letter-spacing: 6px; font-weight: 700; text-shadow: 0 2px 12px rgba(0,0,0,.12); }
+  .hero p { margin-top: 10px; font-size: 15px; opacity: .95; letter-spacing: 1px; }
+  .hero .user-badge {
+    display: inline-block; margin-top: 18px; background: rgba(255,255,255,.25); backdrop-filter: blur(6px);
+    padding: 8px 18px; border-radius: 999px; font-size: 13px;
+  }
+
+  .container { max-width: 860px; margin: -42px auto 0; padding: 0 16px 80px; position: relative; z-index: 2; }
+
+  /* ===== Auth card ===== */
+  .card {
+    background: var(--card); border-radius: 18px; padding: 26px;
+    box-shadow: var(--shadow); margin-bottom: 18px; border: 1px solid var(--border);
+  }
+  .card h2 { font-size: 19px; color: var(--pink-dark); margin-bottom: 16px; }
+  input, textarea {
+    width: 100%; padding: 12px 14px; border: 1.5px solid #f2c9d4; border-radius: 12px;
+    font-size: 15px; margin-bottom: 10px; outline: none; background: #fff; transition: border .2s;
+  }
+  input:focus, textarea:focus { border-color: var(--pink); }
+  .btn {
+    display: inline-block; background: linear-gradient(135deg, var(--pink), var(--pink-dark));
+    color: #fff; border: none; padding: 11px 24px; border-radius: 999px; font-size: 14px;
+    cursor: pointer; transition: transform .15s, box-shadow .15s; box-shadow: 0 3px 12px rgba(255,143,171,.4);
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(255,143,171,.5); }
+  .btn.secondary {
+    background: #fff; color: var(--pink-dark); border: 1.5px solid var(--pink); box-shadow: none;
+  }
+  .btn.small { padding: 6px 14px; font-size: 12px; }
+  .btn.danger { background: #fff; color: #e05555; border: 1.5px solid #ecc; box-shadow: none; }
+  .btn.danger:hover { background: #fef2f2; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .error { color: #d33; font-size: 13px; margin-top: 8px; }
+  .ok { color: #2a9d6f; font-size: 13px; margin-top: 8px; }
+
+  /* ===== Timeline ===== */
+  .timeline { position: relative; padding-left: 30px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 9px; top: 4px; bottom: 4px; width: 2px;
+    background: linear-gradient(var(--pink), var(--pink-light));
+  }
+  .note {
+    position: relative; background: var(--card); border-radius: 14px; padding: 20px 22px;
+    margin-bottom: 20px; box-shadow: var(--shadow); border: 1px solid var(--border);
+    border-left: 4px solid var(--pink); animation: fadeUp .4s ease;
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .note::before {
+    content: ""; position: absolute; left: -28px; top: 26px; width: 12px; height: 12px;
+    background: var(--pink); border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--pink);
+  }
+  .note.pinned { border-left-color: #FFB347; }
+  .note.pinned::before { background: #FFB347; box-shadow: 0 0 0 2px #FFB347; }
+  .note.pinned .pin-tag { color: #FFB347; font-size: 12px; margin-left: 6px; }
+
+  .note-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .note-title { font-size: 19px; font-weight: 700; color: #333; letter-spacing: .3px; line-height: 1.4; }
+  .note-meta { font-size: 12px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .note-meta .icon { font-style: normal; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .tag {
+    font-size: 11px; padding: 3px 12px; border-radius: 999px; background: var(--pink-light);
+    color: var(--pink-dark); border: 1px solid #ffd3dd;
+  }
+  .note-body { margin-top: 12px; font-size: 15px; line-height: 1.75; color: #555; white-space: pre-wrap; word-break: break-word; }
+
+  /* 待办清单 */
+  .todo-list { margin-top: 12px; }
+  .todo-item {
+    display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 10px;
+    background: #faf7f8; margin-bottom: 6px; font-size: 14px;
+  }
+  .todo-item.done .todo-text { text-decoration: line-through; color: #bbb; }
+  .todo-check {
+    width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--pink);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; flex-shrink: 0;
+  }
+  .todo-item.done .todo-check { background: var(--pink); }
+
+  /* 图片画廊 */
+  .gallery { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .gallery img {
+    width: 100%; height: 150px; object-fit: cover; border-radius: 12px; cursor: zoom-in;
+    transition: transform .2s; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  }
+  .gallery img:hover { transform: scale(1.03); }
+
+  /* 音频 */
+  .audio-player { margin-top: 14px; }
+  .audio-player audio { width: 100%; height: 40px; }
+
+  /* 提醒 */
+  .reminder-badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #fff;
+    background: linear-gradient(135deg, #FFB347, #FF8F50); padding: 4px 14px; border-radius: 999px; margin-top: 10px;
+  }
+
+  /* 空状态 */
+  .empty { text-align: center; color: #c9c9c9; padding: 60px 0; }
+  .empty .big { font-size: 52px; margin-bottom: 12px; }
+
+  /* 轻量灯箱 */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,.82); z-index: 100; display: none;
+    align-items: center; justify-content: center; cursor: zoom-out;
+  }
+  .lightbox.show { display: flex; }
+  .lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 10px; }
+
+  /* 管理员 */
+  .admin-note { border-left-color: #b78aff; }
+  .count { font-size: 13px; color: var(--muted); margin: 6px 0 16px; }
+  .hidden { display: none; }
+  @media (max-width: 560px) {
+    .hero h1 { font-size: 26px; }
+    .note { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>🌸 樱花便签</h1>
+  <p>记录生活的每一片花瓣</p>
+  <div class="user-badge" id="heroUser">云同步 · 网页日记本</div>
+</div>
+
+<div class="container">
+
+  <!-- 登录/注册 -->
+  <div class="card" id="authCard">
+    <h2 id="authTitle">登录</h2>
+    <input id="username" placeholder="用户名" autocomplete="username">
+    <input id="password" type="password" placeholder="密码" autocomplete="current-password">
+    <div class="row">
+      <button class="btn" onclick="doAuth(false)">登录</button>
+      <button class="btn secondary" onclick="doAuth(true)">注册</button>
+    </div>
+    <div id="authMsg" class="error"></div>
+  </div>
+
+  <!-- 日记时间线 -->
+  <div class="card hidden" id="notesCard">
+    <div class="row" style="justify-content:space-between;">
+      <h2 style="margin:0;">我的日记</h2>
+      <div class="row">
+        <button class="btn small secondary" onclick="exportTxt()">📄 导出 TXT</button>
+        <button class="btn small secondary" onclick="exportJson()">📦 导出 JSON</button>
+        <button class="btn small secondary" onclick="logout()">退出</button>
+      </div>
+    </div>
+    <div id="count" class="count"></div>
+    <div id="notes" class="timeline"></div>
+  </div>
+
+  <!-- 管理员面板 -->
+  <div class="card hidden" id="adminCard">
+    <h2>👑 用户管理</h2>
+    <div id="adminMsg" class="ok"></div>
+    <div id="adminUsers"></div>
+  </div>
+</div>
+
+<!-- 灯箱 -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('show')">
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+let token = localStorage.getItem('token') || '';
+let username = localStorage.getItem('username') || '';
+let isAdmin = localStorage.getItem('is_admin') === '1';
+
+function api(path, opts = {}) {
+  const headers = opts.headers || {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  return fetch(path, { ...opts, headers });
+}
+
+async function doAuth(register) {
+  const msg = document.getElementById('authMsg');
+  msg.className = 'error'; msg.textContent = '';
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  if (!u || p.length < 6) { msg.textContent = '用户名不能为空，密码至少 6 位'; return; }
+  try {
+    const res = await api('/api/' + (register ? 'register' : 'login'), {
+      method: 'POST', body: JSON.stringify({ username: u, password: p })
+    });
+    const data = await res.json();
+    if (!res.ok) { msg.textContent = data.detail || '请求失败'; return; }
+    token = data.token; username = data.username;
+    isAdmin = !!data.is_admin;
+    localStorage.setItem('token', token);
+    localStorage.setItem('username', username);
+    localStorage.setItem('is_admin', isAdmin ? '1' : '0');
+    document.getElementById('heroUser').textContent = '🌸 ' + username + (isAdmin ? ' · 管理员' : '');
+    loadNotes();
+  } catch (e) { msg.textContent = '网络错误'; }
+}
+
+function logout() {
+  token = ''; username = ''; isAdmin = false;
+  localStorage.removeItem('token');
+  localStorage.removeItem('username');
+  localStorage.removeItem('is_admin');
+  location.reload();
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const opts = sameDay
+    ? { hour: '2-digit', minute: '2-digit' }
+    : { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  return d.toLocaleString('zh-CN', opts);
+}
+
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('show');
+}
+
+/* 渲染单条日记 */
+function renderNote(note) {
+  const title = note.title || (note.type === 'LIST' ? '待办清单' : '无标题');
+  const pinned = note.pinned ? '<span class="pin-tag">📌 置顶</span>' : '';
+  const labels = (note.labels || []).map(l => '<span class="tag">#' + esc(l) + '</span>').join('');
+
+  let bodyHtml = '';
+  if (note.body) bodyHtml = '<div class="note-body">' + esc(note.body) + '</div>';
+
+  // 待办清单
+  let todoHtml = '';
+  if (note.items && note.items.length) {
+    todoHtml = '<div class="todo-list">' + note.items.map(it =>
+      '<div class="todo-item' + (it.checked ? ' done' : '') + '">' +
+      '<span class="todo-check">' + (it.checked ? '✓' : '') + '</span>' +
+      '<span class="todo-text">' + esc(it.body || '') + '</span></div>'
+    ).join('') + '</div>';
+  }
+
+  // 图片画廊
+  let galleryHtml = '';
+  const images = note.images || [];
+  if (images.length) {
+    galleryHtml = '<div class="gallery">' + images.map(img => {
+      const src = img.url || '';
+      return src ? '<img src="' + src + '" alt="' + esc(img.name || '') + '" onclick="openLightbox(\'' + src + '\')">' : '';
+    }).join('') + '</div>';
+  }
+
+  // 音频
+  let audioHtml = '';
+  const audios = note.audios || [];
+  if (audios.length) {
+    audioHtml = '<div class="audio-player">' + audios.map(a => {
+      const src = a.url || '';
+      return src ? '<audio controls preload="none" src="' + src + '"></audio>' : '';
+    }).join('') + '</div>';
+  }
+
+  // 提醒
+  let reminderHtml = '';
+  if (note.reminder && note.reminder.timestamp) {
+    const freqMap = { ONCE: '提醒一次', DAILY: '每天重复', MONTHLY: '每月重复' };
+    const freq = freqMap[note.reminder.frequency] || '提醒';
+    reminderHtml = '<div class="reminder-badge">⏰ ' + freq + ' · ' + fmtTime(note.reminder.timestamp) + '</div>';
+  }
+
+  return '<div class="note' + (pinned ? ' pinned' : '') + '">' +
+    '<div class="note-head"><div><div class="note-title">' + esc(title) + pinned + '</div>' +
+    '<div class="note-meta"><span>🕐 ' + fmtTime(note.timestamp) + '</span>' +
+    (note.folder === 'ARCHIVED' ? '<span>📦 已归档</span>' : '') + '</div></div></div>' +
+    labels + bodyHtml + todoHtml + galleryHtml + audioHtml + reminderHtml +
+    '</div>';
+}
+
+async function loadNotes() {
+  document.getElementById('authCard').classList.add('hidden');
+  document.getElementById('notesCard').classList.remove('hidden');
+  if (isAdmin) {
+    document.getElementById('adminCard').classList.remove('hidden');
+    loadAdminUsers();
+  }
+  const res = await api('/api/notes');
+  const data = await res.json();
+  const box = document.getElementById('notes');
+  document.getElementById('count').textContent = '共 ' + (data.count || 0) + ' 条日记';
+  if (!data.notes || data.notes.length === 0) {
+    box.innerHTML = '<div class="empty"><div class="big">🌸</div>还没有日记<br>去 App 里记录后同步吧</div>';
+    return;
+  }
+  // 置顶优先，然后按时间倒序
+  const sorted = [...data.notes].sort((a, b) => (b.pinned - a.pinned) || (b.timestamp - a.timestamp));
+  box.innerHTML = sorted.map(renderNote).join('');
+}
+
+function download(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function exportTxt() {
+  const res = await api('/api/export');
+  const text = await res.text();
+  download('樱花便签-' + username + '-' + new Date().toISOString().slice(0, 10) + '.txt', text);
+}
+
+async function exportJson() {
+  const res = await api('/api/notes');
+  const data = await res.json();
+  download('樱花便签-' + username + '-' + new Date().toISOString().slice(0, 10) + '.json',
+    JSON.stringify(data.notes, null, 2));
+}
+
+/* ===== 管理员面板 ===== */
+async function loadAdminUsers() {
+  const box = document.getElementById('adminUsers');
+  const msg = document.getElementById('adminMsg');
+  msg.textContent = '';
+  try {
+    const res = await api('/api/admin/users');
+    if (!res.ok) { msg.className = 'error'; msg.textContent = (await res.json().catch(() => ({}))).detail || '加载失败'; return; }
+    const data = await res.json();
+    if (!data.users || data.users.length === 0) { box.innerHTML = '<div class="empty">暂无用户</div>'; return; }
+    box.innerHTML = data.users.map(u => {
+      const created = new Date(u.created_at).toLocaleString('zh-CN');
+      const badge = u.is_admin ? ' <span style="color:#E56E8F">👑 管理员</span>' : '';
+      return '<div class="note admin-note"><h3 style="font-size:16px;">' + esc(u.username) + badge +
+        ' <span class="note-meta" style="display:inline;margin:0;">#' + u.id + ' · ' + (u.note_count || 0) + ' 条日记 · ' + created + '</span></h3>' +
+        '<div class="row" style="margin-top:10px;"><button class="btn small secondary" onclick="adminViewNotes(' + u.id + ')">查看日记</button>' +
+        (u.is_admin ? '' : '<button class="btn small danger" onclick="adminDeleteUser(' + u.id + ')">删除用户</button>') +
+        '</div></div>';
+    }).join('');
+  } catch (e) { msg.className = 'error'; msg.textContent = '网络错误'; }
+}
+
+async function adminViewNotes(userId) {
+  const msg = document.getElementById('adminMsg');
+  try {
+    const res = await api('/api/admin/users/' + userId + '/notes');
+    const data = await res.json();
+    if (!res.ok) { msg.className = 'error'; msg.textContent = data.detail || '加载失败'; return; }
+    if (!data.notes || data.notes.length === 0) { alert('该用户暂无日记'); return; }
+    const txt = data.notes.map(n => {
+      let s = '===== ' + (n.title || '无标题') + ' =====\n';
+      if (n.body) s += n.body + '\n';
+      (n.items || []).forEach(it => { s += (it.checked ? '[x] ' : '[ ] ') + (it.body || '') + '\n'; });
+      return s;
+    }).join('\n');
+    if (confirm('查看用户 ' + userId + ' 的 ' + data.count + ' 条日记，是否下载为 TXT？')) {
+      download('user-' + userId + '-notes.txt', txt);
+    }
+  } catch (e) { msg.className = 'error'; msg.textContent = '网络错误'; }
+}
+
+async function adminDeleteUser(userId) {
+  if (!confirm('确定删除用户 #' + userId + '？其所有日记将一并删除！')) return;
+  const msg = document.getElementById('adminMsg');
+  try {
+    const res = await api('/api/admin/users/' + userId, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { msg.className = 'error'; msg.textContent = data.detail || '删除失败'; return; }
+    msg.className = 'ok'; msg.textContent = '用户已删除';
+    loadAdminUsers();
+  } catch (e) { msg.className = 'error'; msg.textContent = '网络错误'; }
+}
+
+/* 启动：已有 token 直接进入 */
+if (token) {
+  document.getElementById('heroUser').textContent = '🌸 ' + username + (isAdmin ? ' · 管理员' : '');
+  loadNotes();
+}
+</script>
+</body>
+</html>
