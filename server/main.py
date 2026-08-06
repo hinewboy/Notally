@@ -16,12 +16,13 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Header
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 BASE_DIR = Path("/opt/notebook-sync")
 DB_PATH = BASE_DIR / "data" / "sync.db"
 DATA_DIR = BASE_DIR / "data"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 SECRET_KEY = os.environ.get("SECRET_KEY", "sakura-notebook-secret-change-me")
 TOKEN_TTL = 60 * 60 * 24 * 30  # 30 days
 
@@ -218,6 +219,8 @@ WEB_PAGE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>樱花便签 · 云同步</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#FF8FAB">
 <style>
   :root { --pink: #FF8FAB; --pink-dark: #E56E8F; --bg: #FFF5F7; --card: #fff; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -375,6 +378,11 @@ if (token) { loadNotes(); }
 @app.get("/", response_class=HTMLResponse)
 def home():
     return WEB_PAGE
+
+
+@app.get("/favicon.svg")
+def favicon():
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
 
 
 @app.get("/api/health")

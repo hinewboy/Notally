@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <!-- 圆角方块底（樱花粉） -->
+  <rect x="4" y="4" width="100" height="100" rx="22" fill="#FF8FAB"/>
+
+  <!-- 白色便签纸 -->
+  <rect x="30" y="30" width="48" height="48" rx="6" fill="#FFFFFF"/>
+  <path d="M62,30 L78,30 L78,46 L62,30 Z" fill="#F0F0F0"/>
+
+  <!-- 文字线条 -->
+  <rect x="34" y="38" width="26" height="3" rx="1.5" fill="#E4E4E4"/>
+  <rect x="34" y="46" width="26" height="3" rx="1.5" fill="#E4E4E4"/>
+  <rect x="34" y="54" width="18" height="3" rx="1.5" fill="#E4E4E4"/>
+
+  <!-- 樱花五瓣 -->
+  <g transform="translate(63,40)">
+    <path d="M0,-14 C-5,-9 -5,1 0,5 C5,1 5,-9 0,-14 Z" fill="#FFFFFF" transform="rotate(0)"/>
+    <path d="M0,-14 C-5,-9 -5,1 0,5 C5,1 5,-9 0,-14 Z" fill="#FFF5F7" transform="rotate(72)"/>
+    <path d="M0,-14 C-5,-9 -5,1 0,5 C5,1 5,-9 0,-14 Z" fill="#FFFFFF" transform="rotate(144)"/>
+    <path d="M0,-14 C-5,-9 -5,1 0,5 C5,1 5,-9 0,-14 Z" fill="#FFF5F7" transform="rotate(216)"/>
+    <path d="M0,-14 C-5,-9 -5,1 0,5 C5,1 5,-9 0,-14 Z" fill="#FFFFFF" transform="rotate(288)"/>
+    <circle cx="0" cy="0" r="2.5" fill="#E56E8F"/>
+  </g>
+</svg>
