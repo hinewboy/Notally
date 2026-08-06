@@ -165,18 +165,6 @@ def admin_list_users(admin: dict = Depends(get_admin_user)):
         conn.close()
 
 
-@app.get("/api/admin/users/{user_id}/notes")
-def admin_user_notes(user_id: int, admin: dict = Depends(get_admin_user)):
-    conn = get_db()
-    try:
-        rows = conn.execute(
-            "SELECT note_json FROM notes WHERE user_id = ? ORDER BY rowid", (user_id,)
-        ).fetchall()
-        return {"notes": [json.loads(r["note_json"]) for r in rows], "count": len(rows)}
-    finally:
-        conn.close()
-
-
 @app.delete("/api/admin/users/{user_id}")
 def admin_delete_user(user_id: int, admin: dict = Depends(get_admin_user)):
     if user_id == admin["id"]:
