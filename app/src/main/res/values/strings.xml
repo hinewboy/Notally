@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">便签</string>
+    <string name="app_name" translatable="false">樱花便签</string>
 
     <!-- Fragment Titles -->
     <string name="notes">Notes</string>

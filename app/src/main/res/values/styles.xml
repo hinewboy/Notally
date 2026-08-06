@@ -26,9 +26,9 @@
 
     <style name="AppTheme" parent="Base.AppTheme">
         <item name="colorPrimaryDark">@color/Black</item>
-        <item name="colorPrimary">@color/SmartisanRed</item>
-        <item name="alternateFabTint">@color/SmartisanRed</item>
-        <item name="alternateFabBackground">@color/Red50</item>
+        <item name="colorPrimary">@color/SakuraPink</item>
+        <item name="alternateFabTint">@color/SakuraPink</item>
+        <item name="alternateFabBackground">@color/Sakura50</item>
     </style>
 
     <style name="Widget" parent="AppTheme" />
