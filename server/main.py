@@ -9,6 +9,7 @@ import hmac
 import json
 import os
 import secrets
+import shutil
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -25,6 +26,58 @@ DATA_DIR = BASE_DIR / "data"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SECRET_KEY = os.environ.get("SECRET_KEY", "sakura-notebook-secret-change-me")
 TOKEN_TTL = 60 * 60 * 24 * 30  # 30 days
+
+# ---- 附件空间防护（防止服务器磁盘被挤爆）----
+PROJECT_QUOTA = int(os.environ.get("PROJECT_QUOTA", 1024 * 1024 * 1024))  # 全局附件总配额: 1GB
+PER_USER_QUOTA = int(os.environ.get("PER_USER_QUOTA", 100 * 1024 * 1024))  # 每用户附件配额: 100MB
+MAX_ATTACHMENT_SIZE = int(os.environ.get("MAX_ATTACHMENT_SIZE", 10 * 1024 * 1024))  # 单附件上限: 10MB
+
+
+def quota_error(message: str, code: int = 413) -> JSONResponse:
+    """配额/大小拒绝：detail + message 双字段，App 与网页端都能显示中文原因"""
+    return JSONResponse(status_code=code, content={"detail": message, "message": message})
+
+
+def user_files_dir(user_id: int) -> Path:
+    return DATA_DIR / "files" / str(user_id)
+
+
+def dir_size(path: Path) -> int:
+    """目录总大小（字节），目录不存在返回 0"""
+    if not path.exists():
+        return 0
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for f in filenames:
+            try:
+                total += (Path(dirpath) / f).stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def project_files_total() -> int:
+    """全部用户附件总占用（字节）"""
+    root = DATA_DIR / "files"
+    if not root.exists():
+        return 0
+    return sum(dir_size(root / d) for d in os.listdir(root) if (root / d).is_dir())
+
+
+def cleanup_orphan_files(user_id: int, referenced: set) -> int:
+    """删除该用户未被任何笔记引用的附件文件，返回删除数量"""
+    files_dir = user_files_dir(user_id)
+    if not files_dir.exists():
+        return 0
+    removed = 0
+    for f in files_dir.iterdir():
+        if f.is_file() and f.name not in referenced:
+            try:
+                f.unlink()
+                removed += 1
+            except OSError:
+                continue
+    return removed
 
 app = FastAPI(title="樱花便签云同步", docs_url=None, redoc_url=None)
 
@@ -160,7 +213,12 @@ def admin_list_users(admin: dict = Depends(get_admin_user)):
             "SELECT u.id, u.username, u.is_admin, u.created_at, COUNT(n.id) AS note_count "
             "FROM users u LEFT JOIN notes n ON n.user_id = u.id GROUP BY u.id ORDER BY u.id"
         ).fetchall()
-        return {"users": [dict(r) for r in rows]}
+        users = []
+        for r in rows:
+            u = dict(r)
+            u["usage"] = dir_size(user_files_dir(u["id"]))
+            users.append(u)
+        return {"users": users}
     finally:
         conn.close()
 
@@ -209,6 +267,8 @@ def admin_delete_user(user_id: int, admin: dict = Depends(get_admin_user)):
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="用户不存在")
+        # 清理该用户的附件文件目录，避免残留占用磁盘
+        shutil.rmtree(user_files_dir(user_id), ignore_errors=True)
         return {"deleted": True}
     finally:
         conn.close()
@@ -261,6 +321,32 @@ def register(body: AuthRequest):
 
 @app.put("/api/notes")
 def upload_notes(body: NotesRequest, user: dict = Depends(get_current_user)):
+    # ---- 空间防护：先校验再入库 ----
+    # 1) 单附件大小上限
+    for att in body.attachments:
+        name = att.get("name", "")
+        data = att.get("data", "")
+        if not name or not data:
+            continue
+        if len(data) > MAX_ATTACHMENT_SIZE * 4 // 3 + 1024:  # base64 膨胀约 4/3
+            return quota_error(f"附件过大（上限 {MAX_ATTACHMENT_SIZE // 1024 // 1024}MB），请压缩后再试")
+        raw_len = len(__import__("base64").b64decode(data))
+        if raw_len > MAX_ATTACHMENT_SIZE:
+            return quota_error(f"附件过大（上限 {MAX_ATTACHMENT_SIZE // 1024 // 1024}MB），请压缩后再试")
+
+    # 2) 每用户配额 + 全局总配额
+    user_usage = dir_size(user_files_dir(user["id"]))
+    incoming = sum(
+        len(__import__("base64").b64decode(a["data"]))
+        for a in body.attachments if a.get("name") and a.get("data")
+    )
+    if user_usage + incoming > PER_USER_QUOTA:
+        return quota_error(
+            f"附件空间不足：该账号配额 {PER_USER_QUOTA // 1024 // 1024}MB，已用 {user_usage // 1024 // 1024}MB"
+        )
+    if project_files_total() + incoming > PROJECT_QUOTA:
+        return quota_error("服务器附件空间已满，请稍后再试")
+
     conn = get_db()
     try:
         conn.execute("DELETE FROM notes WHERE user_id = ?", (user["id"],))
@@ -273,7 +359,7 @@ def upload_notes(body: NotesRequest, user: dict = Depends(get_current_user)):
         conn.commit()
 
         # 保存附件文件: data/files/<user_id>/<name>
-        files_dir = DATA_DIR / "files" / str(user["id"])
+        files_dir = user_files_dir(user["id"])
         files_dir.mkdir(parents=True, exist_ok=True)
         saved = 0
         for att in body.attachments:
@@ -289,7 +375,23 @@ def upload_notes(body: NotesRequest, user: dict = Depends(get_current_user)):
                 saved += 1
             except Exception:
                 continue
-        return {"count": len(body.notes), "attachments_saved": saved}
+
+        # 3) 孤儿清理：删除本次上传后不再被引用的旧附件文件
+        referenced = set()
+        for note in body.notes:
+            for key in ("images", "audios"):
+                v = note.get(key, [])
+                if isinstance(v, str):
+                    try:
+                        v = json.loads(v)
+                    except Exception:
+                        v = []
+                for item in v:
+                    if isinstance(item, dict) and item.get("name"):
+                        referenced.add(Path(item["name"]).name)
+        removed = cleanup_orphan_files(user["id"], referenced)
+
+        return {"count": len(body.notes), "attachments_saved": saved, "orphans_removed": removed}
     finally:
         conn.close()
 

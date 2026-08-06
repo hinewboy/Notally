@@ -284,6 +284,15 @@ function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/* 字节数格式化为可读大小 */
+function fmtSize(bytes) {
+  if (!bytes || bytes < 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0, v = bytes;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return (i === 0 ? v : v.toFixed(1)) + ' ' + units[i];
+}
+
 function fmtTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
@@ -414,8 +423,10 @@ async function loadAdminUsers() {
     box.innerHTML = data.users.map(u => {
       const created = new Date(u.created_at).toLocaleString('zh-CN');
       const badge = u.is_admin ? ' <span style="color:#E56E8F">👑 管理员</span>' : '';
+      const usage = fmtSize(u.usage || 0);
       return '<div class="note admin-note"><h3 style="font-size:16px;">' + esc(u.username) + badge +
         ' <span class="note-meta" style="display:inline;margin:0;">#' + u.id + ' · ' + (u.note_count || 0) + ' 条日记 · ' + created + '</span></h3>' +
+        '<div class="note-meta" style="margin-top:4px;">📦 附件 ' + usage + '</div>' +
         '<div class="row" style="margin-top:10px;"><button class="btn small secondary" onclick="adminViewNotes(' + u.id + ',\'' + esc(u.username) + '\')">查看日记</button>' +
         (u.is_admin ? '' : '<button class="btn small danger" onclick="adminDeleteUser(' + u.id + ')">删除用户</button>') +
         '</div></div>';
