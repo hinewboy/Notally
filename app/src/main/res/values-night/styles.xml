@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="AppTheme" parent="Base.AppTheme">
+        <item name="colorPrimary">@color/SmartisanRed</item>
+        <item name="alternateFabTint">?attr/colorOnSecondary</item>
+        <item name="alternateFabBackground">@color/Indigo100</item>
+    </style>
+
+</resources>
