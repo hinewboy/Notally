@@ -267,6 +267,12 @@ function renderNote(note) {
   const pinned = note.pinned ? '<span class="pin-tag">📌 置顶</span>' : '';
   const labels = (note.labels || []).map(l => '<span class="tag">#' + esc(l) + '</span>').join('');
 
+  // 兼容: images/audios 可能是 JSON 字符串(旧数据)或数组
+  let images = note.images || [];
+  if (typeof images === 'string') { try { images = JSON.parse(images); } catch (e) { images = []; } }
+  let audios = note.audios || [];
+  if (typeof audios === 'string') { try { audios = JSON.parse(audios); } catch (e) { audios = []; } }
+
   let bodyHtml = '';
   if (note.body) bodyHtml = '<div class="note-body">' + esc(note.body) + '</div>';
 
@@ -282,7 +288,6 @@ function renderNote(note) {
 
   // 图片画廊
   let galleryHtml = '';
-  const images = note.images || [];
   if (images.length) {
     galleryHtml = '<div class="gallery">' + images.map(img => {
       const src = img.url || '';
@@ -292,7 +297,6 @@ function renderNote(note) {
 
   // 音频
   let audioHtml = '';
-  const audios = note.audios || [];
   if (audios.length) {
     audioHtml = '<div class="audio-player">' + audios.map(a => {
       const src = a.url || '';

@@ -282,6 +282,7 @@ def download_notes(user: dict = Depends(get_current_user)):
         ).fetchall()
         notes = [json.loads(r["note_json"]) for r in rows]
         # 为每条笔记附加文件 URL 映射（供网页端渲染）
+        # 注意: App 端 images/audios 存的是 JSON 字符串, 需解析成列表并写回
         base = f"/api/file/{user['id']}"
         for note in notes:
             images = note.get("images", [])
@@ -291,9 +292,10 @@ def download_notes(user: dict = Depends(get_current_user)):
                 except Exception:
                     images = []
             for img in images:
-                name = img.get("name") if isinstance(img, dict) else None
-                if name:
-                    img["url"] = f"{base}/{Path(name).name}"
+                if isinstance(img, dict) and img.get("name"):
+                    img["url"] = f"{base}/{Path(img['name']).name}"
+            note["images"] = images  # 写回处理后的列表
+
             audios = note.get("audios", [])
             if isinstance(audios, str):
                 try:
@@ -301,9 +303,9 @@ def download_notes(user: dict = Depends(get_current_user)):
                 except Exception:
                     audios = []
             for au in audios:
-                name = au.get("name") if isinstance(au, dict) else None
-                if name:
-                    au["url"] = f"{base}/{Path(name).name}"
+                if isinstance(au, dict) and au.get("name"):
+                    au["url"] = f"{base}/{Path(au['name']).name}"
+            note["audios"] = audios  # 写回处理后的列表
         return {"notes": notes, "count": len(notes)}
     finally:
         conn.close()
