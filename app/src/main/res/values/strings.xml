@@ -21,6 +21,8 @@
     <string name="sign_out_success">已退出登录</string>
     <string name="upload_success">已上传 %1$d 条笔记</string>
     <string name="download_success">已下载 %1$d 条笔记</string>
+    <string name="download_success_attachments">已下载 %1$d 条笔记，附件同步完成（%2$d 个）</string>
+    <string name="download_success_attachments_partial">已下载 %1$d 条笔记，附件同步 %2$d 个成功、%3$d 个失败</string>
     <string name="sync_error">同步失败：%1$s</string>
     <string name="network_error">网络错误，请检查网络连接</string>
     <string name="server_error">服务器错误（%1$d）</string>

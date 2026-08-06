@@ -230,13 +230,18 @@ class Settings : Fragment() {
             .setPositiveButton(R.string.download_notes) { _, _ ->
                 scope.launch {
                     try {
-                        val notes = CloudSync.download(token)
-                        if (notes.isEmpty()) {
+                        val result = CloudSync.download(token, requireContext())
+                        if (result.notes.isEmpty()) {
                             Toast.makeText(requireContext(), getString(R.string.download_success, 0), Toast.LENGTH_SHORT).show()
                             return@launch
                         }
-                        CloudSync.applyDownload(dao, notes)
-                        Toast.makeText(requireContext(), getString(R.string.download_success, notes.size), Toast.LENGTH_SHORT).show()
+                        CloudSync.applyDownload(dao, result.notes)
+                        val message = if (result.attachmentsFailed > 0) {
+                            getString(R.string.download_success_attachments_partial, result.notes.size, result.attachmentsSaved, result.attachmentsFailed)
+                        } else {
+                            getString(R.string.download_success_attachments, result.notes.size, result.attachmentsSaved)
+                        }
+                        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                     } catch (e: CloudSync.ApiException) {
                         Toast.makeText(requireContext(), getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_LONG).show()
                     } catch (e: Exception) {

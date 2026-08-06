@@ -100,11 +100,77 @@ object CloudSync {
         response.optInt("count", 0)
     }
 
-    /** 下载云端全部笔记 */
-    suspend fun download(token: String): List<BaseNote> = withContext(Dispatchers.IO) {
+    /** 下载结果：笔记列表 + 附件同步统计 */
+    class DownloadResult(
+        val notes: List<BaseNote>,
+        val attachmentsSaved: Int,
+        val attachmentsFailed: Int
+    )
+
+    /** 下载云端全部笔记（含图片/音频附件文件到本地媒体目录） */
+    suspend fun download(token: String, context: Context): DownloadResult = withContext(Dispatchers.IO) {
         val response = request("/api/notes", "GET", null, token)
         val array = response.optJSONArray("notes") ?: JSONArray()
-        (0 until array.length()).map { jsonToNote(array.getJSONObject(it)) }
+        val notes = (0 until array.length()).map { jsonToNote(array.getJSONObject(it)) }
+
+        // 逐个下载附件文件：图片 → Images 目录，音频 → Audios 目录
+        val app = context.applicationContext as Application
+        val imageDir = IO.getExternalImagesDirectory(app)
+        val audioDir = IO.getExternalAudioDirectory(app)
+        var saved = 0
+        var failed = 0
+
+        (0 until array.length()).forEach { i ->
+            val noteJson = array.getJSONObject(i)
+
+            val images = noteJson.optJSONArray("images") ?: JSONArray()
+            for (j in 0 until images.length()) {
+                val o = images.optJSONObject(j) ?: continue
+                val name = o.optString("name")
+                val url = o.optString("url")
+                if (name.isEmpty() || url.isEmpty() || imageDir == null) continue
+                val dest = File(imageDir, name)
+                if (dest.exists() && dest.length() > 0) continue // 本地已有则跳过
+                if (downloadFile(url, dest)) saved++ else failed++
+            }
+
+            val audios = noteJson.optJSONArray("audios") ?: JSONArray()
+            for (j in 0 until audios.length()) {
+                val o = audios.optJSONObject(j) ?: continue
+                val name = o.optString("name")
+                val url = o.optString("url")
+                if (name.isEmpty() || url.isEmpty() || audioDir == null) continue
+                val dest = File(audioDir, name)
+                if (dest.exists() && dest.length() > 0) continue
+                if (downloadFile(url, dest)) saved++ else failed++
+            }
+        }
+
+        DownloadResult(notes, saved, failed)
+    }
+
+    /** 下载单个附件文件到目标路径，成功返回 true */
+    private fun downloadFile(urlPath: String, dest: File): Boolean {
+        val connection = URL(ServerBase + urlPath).openConnection() as HttpURLConnection
+        return try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 15000
+            connection.readTimeout = 30000
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                false
+            } else {
+                connection.inputStream.use { input ->
+                    dest.parentFile?.mkdirs()
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.length() > 0
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun parseSession(json: JSONObject): Pair<String, String> {
@@ -198,6 +264,10 @@ object CloudSync {
             ListItem(o.optString("body"), o.optBoolean("checked"))
         }
 
+        // 解析附件元数据（服务器已把 images/audios 解析为对象数组并附带 url）
+        val images = parseImagesArray(json.optJSONArray("images"))
+        val audios = parseAudiosArray(json.optJSONArray("audios"))
+
         var reminder: Reminder? = null
         if (!json.isNull("reminder")) {
             val o = json.getJSONObject("reminder")
@@ -213,8 +283,28 @@ object CloudSync {
         return BaseNote(
             id = id, type = type, folder = folder, color = color, title = title,
             pinned = pinned, timestamp = timestamp, labels = labels, body = body,
-            spans = spans, items = items, images = emptyList(), audios = emptyList(), reminder = reminder
+            spans = spans, items = items, images = images, audios = audios, reminder = reminder
         )
+    }
+
+    /** 解析 images 对象数组为 Image 列表 */
+    private fun parseImagesArray(arr: JSONArray?): List<Image> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val name = o.optString("name")
+            if (name.isEmpty()) null else Image(name, o.optString("mimeType", "image/jpeg"))
+        }
+    }
+
+    /** 解析 audios 对象数组为 Audio 列表 */
+    private fun parseAudiosArray(arr: JSONArray?): List<Audio> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val name = o.optString("name")
+            if (name.isEmpty()) null else Audio(name, o.optLong("duration", 0), o.optLong("timestamp", 0))
+        }
     }
 
     /** JSON 中的 images/audios 字段（附件名列表） */
