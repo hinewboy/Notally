@@ -71,7 +71,7 @@ flowchart LR
 ## 📦 安装与构建
 
 ### 直接安装
-从 [Releases](https://github.com/hinewboy/Notally/releases) 下载最新 APK（约 7.1MB），覆盖安装即可（无需卸载，数据保留）。
+从 [Releases](https://github.com/hinewboy/sakura-notes/releases) 下载最新 APK（约 7.1MB），覆盖安装即可（无需卸载，数据保留）。
 
 ### 自行构建
 
