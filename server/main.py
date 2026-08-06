@@ -499,11 +499,11 @@ async function adminViewNotes(userId) {
       return;
     }
     const txt = data.notes.map(n => {
-      let s = '===== ' + (n.title || '无标题') + ' =====\n';
-      if (n.body) s += n.body + '\n';
-      (n.items || []).forEach(it => { s += (it.checked ? '[x] ' : '[ ] ') + (it.body || '') + '\n'; });
+      let s = '===== ' + (n.title || '无标题') + ' =====\\n';
+      if (n.body) s += n.body + '\\n';
+      (n.items || []).forEach(it => { s += (it.checked ? '[x] ' : '[ ] ') + (it.body || '') + '\\n'; });
       return s;
-    }).join('\n');
+    }).join('\\n');
     if (confirm('查看用户 ' + userId + ' 的 ' + data.count + ' 条笔记，是否下载为 TXT？')) {
       download('user-' + userId + '-notes.txt', txt);
     }
