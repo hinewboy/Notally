@@ -165,6 +165,39 @@ def admin_list_users(admin: dict = Depends(get_admin_user)):
         conn.close()
 
 
+def decorate_attachments(note: dict, user_id: int) -> dict:
+    """解析 images/audios（兼容 JSON 字符串/数组）并为附件补下载 url，返回处理后的 note"""
+    base = f"/api/file/{user_id}"
+    for key in ("images", "audios"):
+        items = note.get(key, [])
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
+        if not isinstance(items, list):
+            items = []
+        for item in items:
+            if isinstance(item, dict) and item.get("name"):
+                item["url"] = f"{base}/{Path(item['name']).name}"
+        note[key] = items
+    return note
+
+
+@app.get("/api/admin/users/{user_id}/notes")
+def admin_user_notes(user_id: int, admin: dict = Depends(get_admin_user)):
+    """超级管理员：查看指定用户的全部日记（含附件 url，供网页端直接渲染）"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT note_json FROM notes WHERE user_id = ? ORDER BY rowid", (user_id,)
+        ).fetchall()
+        notes = [decorate_attachments(json.loads(r["note_json"]), user_id) for r in rows]
+        return {"notes": notes, "count": len(notes)}
+    finally:
+        conn.close()
+
+
 @app.delete("/api/admin/users/{user_id}")
 def admin_delete_user(user_id: int, admin: dict = Depends(get_admin_user)):
     if user_id == admin["id"]:
@@ -269,31 +302,9 @@ def download_notes(user: dict = Depends(get_current_user)):
             "SELECT note_json FROM notes WHERE user_id = ? ORDER BY rowid", (user["id"],)
         ).fetchall()
         notes = [json.loads(r["note_json"]) for r in rows]
-        # 为每条笔记附加文件 URL 映射（供网页端渲染）
-        # 注意: App 端 images/audios 存的是 JSON 字符串, 需解析成列表并写回
-        base = f"/api/file/{user['id']}"
+        # 为每条笔记附加文件 URL 映射（App/网页端共用）
         for note in notes:
-            images = note.get("images", [])
-            if isinstance(images, str):
-                try:
-                    images = json.loads(images)
-                except Exception:
-                    images = []
-            for img in images:
-                if isinstance(img, dict) and img.get("name"):
-                    img["url"] = f"{base}/{Path(img['name']).name}"
-            note["images"] = images  # 写回处理后的列表
-
-            audios = note.get("audios", [])
-            if isinstance(audios, str):
-                try:
-                    audios = json.loads(audios)
-                except Exception:
-                    audios = []
-            for au in audios:
-                if isinstance(au, dict) and au.get("name"):
-                    au["url"] = f"{base}/{Path(au['name']).name}"
-            note["audios"] = audios  # 写回处理后的列表
+            decorate_attachments(note, user["id"])
         return {"notes": notes, "count": len(notes)}
     finally:
         conn.close()
