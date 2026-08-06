@@ -1,37 +1,41 @@
-### Background
-Notally was created because I wanted to make something that was beautiful and at the same time, useful. It's extremely light, there are minimal dependencies and lines of code.
+# 便签 (Notally 二次开发版)
 
-### Features
-* Widgets
-* Reminders
-* Auto backup
-* Search within notes
-* Adjustable text size
-* Support for Lollipop devices and up
-* APK size of 1.4 MB (1.8 MB uncompressed)
-* Color, pin and label your notes for quick organisation
-* Complement your notes with pictures (JPG, PNG, WEBP)
-* Export notes as TXT, JSON, HTML or PDF files with formatting
-* Create rich text notes with support for bold, italics, mono space and strike-through
-* Add clickable links to notes with support for phone numbers, email addresses and web urls
+> [!IMPORTANT]
+> 本项目是基于 **OmGodse/Notally** 的二次开发（fork）作品，原作者为 Om Godse。
+> 原项目仓库：**https://github.com/OmGodse/Notally**（GPL v3 许可）
+> 原项目在 Google Play 与 F-Droid 发布，本仓库仅为个人定制版本，与上游保持独立。
 
-[<img src="https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png" alt="Get it on Google Play"  height="70"/>](https://play.google.com/store/apps/details?id=com.omgodse.notally)
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="70"/>](https://f-droid.org/packages/com.omgodse.notally/)
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="70"/>](https://apt.izzysoft.de/packages/com.omgodse.notally)
+## 本项目的改动
 
-### Contributing
-Issues are currently disabled. Please use the pull requests tab only for translations or bug fixes, This project is currently not accepting feature requests.
+- 应用名由 "Notally" 改为「**便签**」
+- 主题色改为锤子便签风格红色（#D0021B），日间/夜间模式同步调整
+- 应用图标背景改为红色系
+- 其余功能与原版 Notally v6.2 一致
 
-### Translations
-All translations are crowd sourced. To contribute, follow these [guidelines](https://m2.material.io/design/communication/writing.html) and email me or open a pull request.
+## 原版功能（来自上游 Notally）
 
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="250"/><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="250"/><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="250"/>
+* 桌面小部件（Widgets）
+* 提醒（Reminders）
+* 自动备份（Auto backup）
+* 笔记内搜索（Search within notes）
+* 可调节文字大小
+* 支持 Android 5.0 (Lollipop) 及以上设备
+* APK 体积约 1.4 MB（解压后 1.8 MB）
+* 笔记支持颜色标记、置顶、标签分类
+* 支持插入图片（JPG, PNG, WEBP）
+* 支持导出为 TXT、JSON、HTML、PDF（保留格式）
+* 富文本：加粗、斜体、等宽、删除线
+* 可点击链接：电话号码、邮箱、网址
 
-### Hall of fame
-* [Top 20 Android Apps 2021!](https://www.youtube.com/watch?v=bwz13aM0qJk)
-* [De-Googling Any Android Phone! (Google Apps Alternatives)](https://www.youtube.com/watch?v=RQUEgwgV99I)
-* [The BEST Private Notetaking Apps Explained](https://www.youtube.com/watch?v=BJw5tKPP1PY)
-* [Notally](https://www.noteapps.ca/notally/)
-* [The 9 Best Simple Note-Taking Apps for Android](https://www.makeuseof.com/simple-note-apps-android/)
-* [This tiny notes app made me write more because it opens instantly](https://www.makeuseof.com/notally-app-made-me-write-more/)
-* [I tried a minimalist notes app with zero buttons and I’m obsessed](https://www.makeuseof.com/minimalist-notes-app-with-zero-buttons/)
+## 构建
+
+```bash
+# 需要 JDK 21、Android SDK (compileSdk 36)
+./gradlew assembleDebug
+```
+
+APK 输出路径：`app/build/outputs/apk/debug/app-debug.apk`
+
+## 许可
+
+GPL v3 — 与上游 Notally 一致。详见 [LICENSE.md](LICENSE.md)。
