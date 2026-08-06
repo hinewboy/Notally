@@ -77,19 +77,11 @@ class Settings : Fragment() {
         setupProgressDialog(R.string.importing_backup, model.importingBackup)
 
         binding.GitHub.setOnClickListener {
-            openLink("https://github.com/OmGodse/Notally")
+            openLink("https://github.com/hinewboy/Notally")
         }
 
         binding.Libraries.setOnClickListener {
             displayLibraries()
-        }
-
-        binding.Rate.setOnClickListener {
-            openLink("https://play.google.com/store/apps/details?id=com.omgodse.notally")
-        }
-
-        binding.SendFeedback.setOnClickListener {
-            sendEmailWithLog()
         }
     }
 
@@ -136,6 +128,7 @@ class Settings : Fragment() {
     private fun showCloudAuthDialog(binding: FragmentSettingsBinding) {
         val editBinding = com.omgodse.notally.databinding.DialogCloudAuthBinding.inflate(layoutInflater)
         editBinding.EditUsername.requestFocus()
+        editBinding.ConfirmLayout.visibility = View.GONE
 
         var isRegister = false
 
@@ -143,19 +136,21 @@ class Settings : Fragment() {
             .setTitle(R.string.sign_in)
             .setView(editBinding.root)
             .setPositiveButton(R.string.sign_in, null)
-            .setNeutralButton(R.string.sign_up) { _, _ ->
-                isRegister = true
-                val window = editBinding.root.parent?.parent
-                if (window is android.app.AlertDialog) {
-                    window.setTitle(getString(R.string.sign_up))
-                    window.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).isEnabled = false
-                }
-            }
+            .setNeutralButton(R.string.sign_up, null)
             .setNegativeButton(R.string.cancel, null)
             .setOnDismissListener { refreshCloudUi(binding) }
             .create()
 
         dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                isRegister = true
+                dialog.setTitle(getString(R.string.sign_up))
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).text = getString(R.string.sign_up)
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
+                editBinding.ConfirmLayout.visibility = View.VISIBLE
+                editBinding.EditConfirm.requestFocus()
+            }
+
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val username = editBinding.EditUsername.text.toString().trim()
                 val password = editBinding.EditPassword.text.toString()

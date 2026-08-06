@@ -44,6 +44,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            is_admin INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL
         )
     """)
@@ -57,7 +58,29 @@ def init_db():
         )
     """)
     conn.commit()
+    # 迁移：旧库无 is_admin 列时补充
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+    if "is_admin" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE users SET is_admin = 1 WHERE username = 'admin'")
+        conn.commit()
     conn.close()
+
+
+def ensure_admin():
+    """确保存在 admin 管理员账号（从环境变量读取密码，默认 admin123456）"""
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin123456")
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 1, ?)",
+                ("admin", hash_password(admin_pass), int(time.time() * 1000)),
+            )
+            conn.commit()
+    finally:
+        conn.close()
 
 
 def hash_password(password: str) -> str:
@@ -116,6 +139,76 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     return user
 
 
+def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
+    """要求当前用户为管理员（从数据库实时校验）"""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user["id"],)).fetchone()
+        if not row or not row["is_admin"]:
+            raise HTTPException(status_code=403, detail="需要管理员权限")
+        return user
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/users")
+def admin_list_users(admin: dict = Depends(get_admin_user)):
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT u.id, u.username, u.is_admin, u.created_at, COUNT(n.id) AS note_count "
+            "FROM users u LEFT JOIN notes n ON n.user_id = u.id GROUP BY u.id ORDER BY u.id"
+        ).fetchall()
+        return {"users": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/users/{user_id}/notes")
+def admin_user_notes(user_id: int, admin: dict = Depends(get_admin_user)):
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT note_json FROM notes WHERE user_id = ? ORDER BY rowid", (user_id,)
+        ).fetchall()
+        return {"notes": [json.loads(r["note_json"]) for r in rows], "count": len(rows)}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: int, admin: dict = Depends(get_admin_user)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="不能删除自己的管理员账号")
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM notes WHERE user_id = ?", (user_id,))
+        cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        return {"deleted": True}
+    finally:
+        conn.close()
+
+
+@app.post("/api/login")
+def login(body: AuthRequest):
+    username = body.username.strip()
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not row or not verify_password(body.password, row["password_hash"]):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        return {
+            "token": make_token(row["id"], username),
+            "username": username,
+            "is_admin": bool(row["is_admin"]),
+        }
+    finally:
+        conn.close()
+
+
 @app.post("/api/register")
 def register(body: AuthRequest):
     username = body.username.strip()
@@ -124,6 +217,8 @@ def register(body: AuthRequest):
         raise HTTPException(status_code=400, detail="用户名需为 2-32 个字符")
     if len(password) < 6:
         raise HTTPException(status_code=400, detail="密码至少 6 位")
+    if username.lower() == "admin":
+        raise HTTPException(status_code=400, detail="该用户名不可用")
 
     conn = get_db()
     try:
@@ -137,20 +232,7 @@ def register(body: AuthRequest):
         )
         user_id = cur.lastrowid
         conn.commit()
-        return {"token": make_token(user_id, username), "username": username}
-    finally:
-        conn.close()
-
-
-@app.post("/api/login")
-def login(body: AuthRequest):
-    username = body.username.strip()
-    conn = get_db()
-    try:
-        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        if not row or not verify_password(body.password, row["password_hash"]):
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
-        return {"token": make_token(row["id"], username), "username": username}
+        return {"token": make_token(user_id, username), "username": username, "is_admin": False}
     finally:
         conn.close()
 
@@ -277,11 +359,18 @@ WEB_PAGE = """<!DOCTYPE html>
     <div id="count" class="count"></div>
     <div id="notes"></div>
   </div>
+
+  <div class="card hidden" id="adminCard">
+    <h2>👑 用户管理</h2>
+    <div id="adminMsg" class="ok"></div>
+    <div id="adminUsers"></div>
+  </div>
 </div>
 
 <script>
 let token = localStorage.getItem('token') || '';
 let username = localStorage.getItem('username') || '';
+let isAdmin = localStorage.getItem('is_admin') === '1';
 
 function api(path, opts = {}) {
   const headers = opts.headers || {};
@@ -305,22 +394,29 @@ async function doAuth(register) {
     const data = await res.json();
     if (!res.ok) { msg.textContent = data.detail || '请求失败'; return; }
     token = data.token; username = data.username;
+    isAdmin = !!data.is_admin;
     localStorage.setItem('token', token);
     localStorage.setItem('username', username);
+    localStorage.setItem('is_admin', isAdmin ? '1' : '0');
     loadNotes();
   } catch (e) { msg.textContent = '网络错误'; }
 }
 
 function logout() {
-  token = ''; username = '';
+  token = ''; username = ''; isAdmin = false;
   localStorage.removeItem('token');
   localStorage.removeItem('username');
+  localStorage.removeItem('is_admin');
   location.reload();
 }
 
 async function loadNotes() {
   document.getElementById('authCard').classList.add('hidden');
   document.getElementById('notesCard').classList.remove('hidden');
+  if (isAdmin) {
+    document.getElementById('adminCard').classList.remove('hidden');
+    loadAdminUsers();
+  }
   const res = await api('/api/notes');
   const data = await res.json();
   const box = document.getElementById('notes');
@@ -353,6 +449,88 @@ function download(filename, content) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/* ===== 管理员面板 ===== */
+async function loadAdminUsers() {
+  const box = document.getElementById('adminUsers');
+  const msg = document.getElementById('adminMsg');
+  msg.textContent = '';
+  try {
+    const res = await api('/api/admin/users');
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      msg.className = 'error';
+      msg.textContent = d.detail || '加载失败';
+      return;
+    }
+    const data = await res.json();
+    if (!data.users || data.users.length === 0) {
+      box.innerHTML = '<div class="empty">暂无用户</div>';
+      return;
+    }
+    box.innerHTML = data.users.map(u => {
+      const created = new Date(u.created_at).toLocaleString('zh-CN');
+      const badge = u.is_admin ? ' <span style="color:#E56E8F">👑 管理员</span>' : '';
+      return '<div class="note"><h3>' + esc(u.username) + badge +
+        ' <span class="meta">#' + u.id + ' · ' + (u.note_count || 0) + ' 条笔记 · ' + created + '</span></h3>' +
+        '<div class="row"><button class="btn secondary" onclick="adminViewNotes(' + u.id + ')">查看笔记</button>' +
+        (u.is_admin ? '' : '<button class="btn" onclick="adminDeleteUser(' + u.id + ')">删除用户</button>') +
+        '</div></div>';
+    }).join('');
+  } catch (e) {
+    msg.className = 'error';
+    msg.textContent = '网络错误';
+  }
+}
+
+async function adminViewNotes(userId) {
+  const msg = document.getElementById('adminMsg');
+  try {
+    const res = await api('/api/admin/users/' + userId + '/notes');
+    const data = await res.json();
+    if (!res.ok) {
+      msg.className = 'error';
+      msg.textContent = data.detail || '加载失败';
+      return;
+    }
+    if (!data.notes || data.notes.length === 0) {
+      alert('该用户暂无笔记');
+      return;
+    }
+    const txt = data.notes.map(n => {
+      let s = '===== ' + (n.title || '无标题') + ' =====\n';
+      if (n.body) s += n.body + '\n';
+      (n.items || []).forEach(it => { s += (it.checked ? '[x] ' : '[ ] ') + (it.body || '') + '\n'; });
+      return s;
+    }).join('\n');
+    if (confirm('查看用户 ' + userId + ' 的 ' + data.count + ' 条笔记，是否下载为 TXT？')) {
+      download('user-' + userId + '-notes.txt', txt);
+    }
+  } catch (e) {
+    msg.className = 'error';
+    msg.textContent = '网络错误';
+  }
+}
+
+async function adminDeleteUser(userId) {
+  if (!confirm('确定删除用户 #' + userId + '？其所有笔记将一并删除！')) return;
+  const msg = document.getElementById('adminMsg');
+  try {
+    const res = await api('/api/admin/users/' + userId, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.className = 'error';
+      msg.textContent = data.detail || '删除失败';
+      return;
+    }
+    msg.className = 'ok';
+    msg.textContent = '用户已删除';
+    loadAdminUsers();
+  } catch (e) {
+    msg.className = 'error';
+    msg.textContent = '网络错误';
+  }
 }
 
 async function exportTxt() {
@@ -391,3 +569,4 @@ def health():
 
 
 init_db()
+ensure_admin()
