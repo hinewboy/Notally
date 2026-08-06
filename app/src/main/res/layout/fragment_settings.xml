@@ -91,6 +91,47 @@
             style="@style/PreferenceHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:text="@string/cloud_sync" />
+
+        <TextView
+            android:id="@+id/CloudStatus"
+            style="@style/Preference"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/cloud_sync_subtitle" />
+
+        <TextView
+            android:id="@+id/CloudLogin"
+            style="@style/Preference"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sign_in" />
+
+        <TextView
+            android:id="@+id/CloudUpload"
+            style="@style/Preference"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/upload_notes"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/CloudDownload"
+            style="@style/Preference"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/download_notes"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?android:attr/listDivider" />
+
+        <TextView
+            style="@style/PreferenceHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:text="@string/about" />
 
         <TextView

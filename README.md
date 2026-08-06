@@ -10,7 +10,15 @@
 - 应用名由 "Notally" 改为「**樱花便签**」
 - 主题色改为樱花粉（#FF8FAB），日间/夜间模式同步调整
 - 应用图标背景改为樱花粉
+- **完整中文本地化**：补齐全部 51 个缺失翻译，设置选项全部跟随系统语言
+- **云同步**：新增注册/登录模块，可上传/下载笔记到云端（notebook.978021.xyz），支持网页浏览与导出
 - 其余功能与原版 Notally v6.2 一致
+
+## 云同步
+
+- 服务器：`https://notebook.978021.xyz`（FastAPI + SQLite，代码在 `server/` 目录）
+- 功能：注册登录、笔记上传/下载、网页浏览、TXT/JSON 导出
+- 部署：`server/notebook-sync.service`（systemd）+ `server/nginx-notebook.conf`（nginx 反代 + HTTPS）
 
 ## 原版功能（来自上游 Notally）
 

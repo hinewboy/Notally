@@ -16,6 +16,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.omgodse.notally.MenuDialog
 import com.omgodse.notally.Progress
@@ -24,9 +25,12 @@ import com.omgodse.notally.databinding.DialogProgressBinding
 import com.omgodse.notally.databinding.FragmentSettingsBinding
 import com.omgodse.notally.databinding.PreferenceBinding
 import com.omgodse.notally.databinding.PreferenceSeekbarBinding
+import com.omgodse.notally.miscellaneous.CloudSync
 import com.omgodse.notally.miscellaneous.Operations
 import com.omgodse.notally.preferences.*
+import com.omgodse.notally.room.NotallyDatabase
 import com.omgodse.notally.viewmodels.BaseNoteModel
+import kotlinx.coroutines.launch
 
 class Settings : Fragment() {
 
@@ -89,9 +93,170 @@ class Settings : Fragment() {
         }
     }
 
+    private fun setupCloudSync(binding: FragmentSettingsBinding) {
+        refreshCloudUi(binding)
+
+        binding.CloudLogin.setOnClickListener {
+            val (token, _) = CloudSync.getSession(requireContext())
+            if (token == null) {
+                showCloudAuthDialog(binding)
+            } else {
+                CloudSync.clearSession(requireContext())
+                Toast.makeText(requireContext(), R.string.sign_out_success, Toast.LENGTH_SHORT).show()
+                refreshCloudUi(binding)
+            }
+        }
+
+        binding.CloudUpload.setOnClickListener {
+            val (token, _) = CloudSync.getSession(requireContext())
+            if (token != null) uploadNotes(token)
+        }
+
+        binding.CloudDownload.setOnClickListener {
+            val (token, _) = CloudSync.getSession(requireContext())
+            if (token != null) downloadNotes(token)
+        }
+    }
+
+    private fun refreshCloudUi(binding: FragmentSettingsBinding) {
+        val (token, username) = CloudSync.getSession(requireContext())
+        if (token == null) {
+            binding.CloudStatus.text = getString(R.string.cloud_sync_subtitle)
+            binding.CloudLogin.text = getString(R.string.sign_in)
+            binding.CloudUpload.visibility = View.GONE
+            binding.CloudDownload.visibility = View.GONE
+        } else {
+            binding.CloudStatus.text = getString(R.string.logged_in_as, username ?: "")
+            binding.CloudLogin.text = getString(R.string.sign_out)
+            binding.CloudUpload.visibility = View.VISIBLE
+            binding.CloudDownload.visibility = View.VISIBLE
+        }
+    }
+
+    private fun showCloudAuthDialog(binding: FragmentSettingsBinding) {
+        val editBinding = com.omgodse.notally.databinding.DialogCloudAuthBinding.inflate(layoutInflater)
+        editBinding.EditUsername.requestFocus()
+
+        var isRegister = false
+
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.sign_in)
+            .setView(editBinding.root)
+            .setPositiveButton(R.string.sign_in, null)
+            .setNeutralButton(R.string.sign_up) { _, _ ->
+                isRegister = true
+                val window = editBinding.root.parent?.parent
+                if (window is android.app.AlertDialog) {
+                    window.setTitle(getString(R.string.sign_up))
+                    window.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).isEnabled = false
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setOnDismissListener { refreshCloudUi(binding) }
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val username = editBinding.EditUsername.text.toString().trim()
+                val password = editBinding.EditPassword.text.toString()
+                val confirm = editBinding.EditConfirm.text.toString()
+                if (username.isEmpty()) {
+                    editBinding.EditUsername.error = getString(R.string.username_hint)
+                    return@setOnClickListener
+                }
+                if (password.length < 6) {
+                    editBinding.EditPassword.error = getString(R.string.password_hint)
+                    return@setOnClickListener
+                }
+                if (isRegister && password != confirm) {
+                    editBinding.EditConfirm.error = getString(R.string.password_mismatch)
+                    return@setOnClickListener
+                }
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                lifecycleScope.launch {
+                    try {
+                        val (token, name) = if (isRegister) {
+                            CloudSync.register(username, password)
+                        } else {
+                            CloudSync.login(username, password)
+                        }
+                        CloudSync.saveSession(requireContext(), token, name)
+                        Toast.makeText(requireContext(),
+                            if (isRegister) R.string.register_success else R.string.login_success,
+                            Toast.LENGTH_SHORT).show()
+                        dialog.dismiss()
+                    } catch (e: CloudSync.ApiException) {
+                        Toast.makeText(requireContext(),
+                            getString(R.string.sync_error, e.message ?: "HTTP ${e.code}"),
+                            Toast.LENGTH_LONG).show()
+                        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                    } catch (e: Exception) {
+                        Toast.makeText(requireContext(), R.string.network_error, Toast.LENGTH_LONG).show()
+                        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                    }
+                }
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun uploadNotes(token: String) {
+        val scope = lifecycleScope
+        val app = requireContext().applicationContext as Application
+        val dao = NotallyDatabase.getDatabase(app).getBaseNoteDao()
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setMessage(R.string.sync_confirm_upload)
+            .setPositiveButton(R.string.upload_notes) { _, _ ->
+                scope.launch {
+                    try {
+                        val notes = dao.getAllNotes()
+                        val count = CloudSync.upload(token, notes)
+                        Toast.makeText(requireContext(), getString(R.string.upload_success, count), Toast.LENGTH_SHORT).show()
+                    } catch (e: CloudSync.ApiException) {
+                        Toast.makeText(requireContext(), getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(requireContext(), R.string.network_error, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun downloadNotes(token: String) {
+        val scope = lifecycleScope
+        val app = requireContext().applicationContext as Application
+        val dao = NotallyDatabase.getDatabase(app).getBaseNoteDao()
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setMessage(R.string.sync_confirm_download)
+            .setPositiveButton(R.string.download_notes) { _, _ ->
+                scope.launch {
+                    try {
+                        val notes = CloudSync.download(token)
+                        if (notes.isEmpty()) {
+                            Toast.makeText(requireContext(), getString(R.string.download_success, 0), Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        CloudSync.applyDownload(dao, notes)
+                        Toast.makeText(requireContext(), getString(R.string.download_success, notes.size), Toast.LENGTH_SHORT).show()
+                    } catch (e: CloudSync.ApiException) {
+                        Toast.makeText(requireContext(), getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(requireContext(), R.string.network_error, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val binding = FragmentSettingsBinding.inflate(inflater)
         setupBinding(binding)
+        setupCloudSync(binding)
         return binding.root
     }
 
